@@ -1,4 +1,9 @@
-<!-- list of nodes -->
+<!-- definition of cell -->
+<ManagementScope scopeName="(cell):bl-winwwwCell01" scopeType="cell"/>
+<ManagementScope scopeName="(cell):bl-winwwwCell01:(node):bl-winwwwNode01" scopeType="node"/>
+<ManagementScope scopeName="(cell):bl-winwwwCell01:(node):ProdNode01" scopeType="node"/>
+
+        <!-- list of nodes -->
 <NodeGroup Target="Cell" description="WebSphere Default Node Group." name="DefaultNodeGroup">
     <NodeGroupMember nodeName="bl-winwwwCellManager01"/>
     <NodeGroupMember nodeName="bl-winwwwNode01"/>

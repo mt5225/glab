@@ -65,21 +65,25 @@ def load_app():
         # insert node with name, label and properties
         node = neo_operation.insert_node(li['Name'], 'Application_Attribute', properties)[0]
         # add rel to app root
-        neo_operation.add_ref(app_root, 'HAS', node)
+        neo_operation.add_ref(app_root, 'HAS PROPERTIES', node)
+
+    ##TODO: use listModule to create real relations
+    server = neo_operation.find_element_by_name('server1')
+    neo_operation.add_ref(app_root, 'INSTALL ON', server)
 
 
-def load_nodes():
+def load_cell_and_nodes():
     """
     Load all the node defined in cell
     """
-    #load nodes tree
-    nodes = load_ara_xml(__ORIGN_XML__, 'NodeGroup').next()
-
+    cell_xml = load_ara_xml(__ORIGN_XML__, 'Security/ManagementScope').next()
     #creat cell
-    cell = neo_operation.insert_node('Cell', 'Cell', {})[0]
+    cell = neo_operation.insert_node(cell_xml.attrib['scopeName'], 'Cell', {})[0]
 
+    #load nodes tree
+    nodes_xml = load_ara_xml(__ORIGN_XML__, 'NodeGroup').next()
     #get list of nodes
-    node_group_number = nodes.iterfind('NodeGroupMember')
+    node_group_number = nodes_xml.iterfind('NodeGroupMember')
     for item in node_group_number:
         li = neo_operation.insert_node(item.attrib['nodeName'], 'Node', {})[0]
         neo_operation.add_ref(cell, 'HAS', li)
@@ -89,8 +93,8 @@ def load_servers():
     """
     Load all server defined in cell
     """
-    servers = load_ara_xml(__ORIGN_XML__, 'CoreGroup').next()
-    server_number = servers.iterfind('CoreGroupServer')
+    servers_xml = load_ara_xml(__ORIGN_XML__, 'CoreGroup').next()
+    server_number = servers_xml.iterfind('CoreGroupServer')
 
     for item in server_number:
         print item.attrib
@@ -104,10 +108,10 @@ def load_cluster():
     """
     Load cluster definition, and build relationship between cluster and node numbers
     """
-    cluster = load_ara_xml(__ORIGN_XML__, 'ServerCluster').next()
-    cluster_numbers = cluster.iterfind('ClusterMember')
+    cluster_xml = load_ara_xml(__ORIGN_XML__, 'ServerCluster').next()
+    cluster_numbers = cluster_xml.iterfind('ClusterMember')
     #create cluster node
-    cluster_node = neo_operation.insert_node(cluster.attrib['name'], 'Cluster', {})[0]
+    cluster_node = neo_operation.insert_node(cluster_xml.attrib['name'], 'Cluster', {})[0]
     for item in cluster_numbers:
         print item.attrib['memberName']
         li = neo_operation.find_element_by_name(item.attrib['memberName'])
@@ -118,10 +122,12 @@ if __name__ == '__main__':
     #clean up all the notes in db
     neo_operation = GraphOperation()
     neo_operation.clean_up()
-    load_app()
-    load_nodes()
+
+    #load asset
+    load_cell_and_nodes()
     load_servers()
     load_cluster()
+    load_app()
 
 
 
