@@ -3,7 +3,7 @@ __author__ = 'iist'
 
 __NEO4J_URL__ = 'http://localhost:7474/db/data/'
 
-from py2neo import neo4j, node, rel
+from py2neo import neo4j, rel
 
 ######
 # all operation to neo4j goes to this class
@@ -48,10 +48,12 @@ class GraphOperation():
         batch.submit()
 
 
-    def find_element_by_name(self, element_name):
+    def find_elements_by_name(self, element_name):
         """
-        find a element by its name
-        return node referance
+        find element list by names
+        return node reference
         """
-        return self.graph_db.get_indexed_node('ElementName', 'NAME', element_name)
+        batch = neo4j.ReadBatch(self.graph_db)
+        batch.get_indexed_nodes('ElementName', 'NAME', element_name)
+        return batch.submit()
 

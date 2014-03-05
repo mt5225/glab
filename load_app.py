@@ -3,13 +3,12 @@ __author__ = 'iist'
 
 import xml.etree.ElementTree as ET
 from graph import GraphOperation
-from pprint import pprint
 
 ############################
 # Load app info and insert into neo4j
 ###########################
 
-__ORIGN_XML__ = 'DEVWAS_snapshot_140304082643.xml'
+__ORIGN_XML__ = 'ara46.xml'
 __UUID__ = 'DEVWAS_snapshot_140304082643'
 
 
@@ -27,27 +26,44 @@ def load_ara_xml(filename, path):
 
 def name_value_to_dict(item):
     '''
-    trnasform  {'Name': 'allowDispatchRemoteInclude', 'Value': 'AppDeploymentOption.No'}
+    transform  {'Name': 'allowDispatchRemoteInclude', 'Value': 'AppDeploymentOption.No'}
     to dict structure {'allowDispatchRemoteInclude': 'AppDeploymentOption.No'}
     '''
     return {item.attrib['Name']: item.attrib['Value']}
 
 
-def load_app():
+def load_app(cluster_list):
     """
     Load application definition
     """
-    #load application tree
-    app = load_ara_xml(__ORIGN_XML__, 'Application').next()
+    for app_xml in load_ara_xml(__ORIGN_XML__, 'Application'):
+        app_node = neo_operation.insert_node(app_xml.attrib['displayName'], 'Application', {})[0]
+        load_app_deployment_property_set(app_xml, app_node)
+        load_deployment(app_xml, app_node, cluster_list)
 
+
+def load_deployment(app_xml, app_node, cluster_list):
+    """
+    Draw application deployment model
+    """
+    app_deployment_xml = app_xml.iterfind(
+        'Deployment/ApplicationDeployment/DeploymentTargetMapping/ClusteredTarget').next()
+    app_target = app_deployment_xml.attrib['name']
+    for cluster in cluster_list:
+        if app_target == cluster['name']:
+            print 'Add ' + app_node['name'] + 'to cluster ' + app_target
+            neo_operation.add_ref(app_node, 'deployed to', cluster)
+
+
+def load_app_deployment_property_set(app_xml, app_node):
+    """
+    Load application deployment properties
+    """
     #get list of AppDeploymentTask nodes
-    app_node = app.iterfind('AppDeploymentTask')
+    properties_xml = app_xml.iterfind('AppDeploymentTask')
 
-    #TODO: create application node
-    app_root = neo_operation.insert_node('JPetStore_war', 'Application', {})[0]
-
-    #for each node, insert into neo4j
-    for attribute_set_item in app_node:
+    #for each property, insert into neo4j
+    for attribute_set_item in properties_xml:
         #construct properties dict
         item_list = attribute_set_item.iterfind('TaskData/TaskColumn')
         properties = reduce(lambda x, y: dict(x.items() + y.items()),
@@ -58,24 +74,12 @@ def load_app():
         if properties is not None:
             attribute_set = neo_operation.insert_node(attribute_set_item.attrib['Name'], 'AttributeSet', properties)[0]
         # add rel to app root
-        neo_operation.add_ref(app_root, 'has properties', attribute_set)
-    return app_root
+        neo_operation.add_ref(app_node, 'has properties', attribute_set)
 
 
-def load_deployment(app):
+def load_cell_nodes_and_servers():
     """
-    Draw deployment model
-    """
-    app_deployment_xml = load_ara_xml(__ORIGN_XML__,
-                                      'Application/Deployment/ApplicationDeployment/DeploymentTargetMapping/ClusteredTarget').next()
-    app_target = app_deployment_xml.attrib['name']
-    app_cluster = neo_operation.find_element_by_name(app_target)
-    neo_operation.add_ref(app, 'deployed to', app_cluster)
-
-
-def load_cell_and_nodes():
-    """
-    Load all the node defined in cell
+    Load all the node, server and cell
     """
     cell_xml = load_ara_xml(__ORIGN_XML__, 'Cell').next()
     print 'Add Cell : ' + cell_xml.attrib['name']
@@ -85,41 +89,45 @@ def load_cell_and_nodes():
     nodes_xml = load_ara_xml(__ORIGN_XML__, 'NodeGroup').next()
     #get list of nodes
     node_group_number = nodes_xml.iterfind('NodeGroupMember')
+    node_list = []
     for item in node_group_number:
         print 'Add Node :' + item.attrib['nodeName']
         li = neo_operation.insert_node(item.attrib['nodeName'], 'Node', {})[0]
+        node_list.append(li)
         neo_operation.add_ref(cell, 'HAS', li)
 
-
-def load_servers():
-    """
-    Load all server defined in cell
-    """
+    #load server and associated with node
     servers_xml = load_ara_xml(__ORIGN_XML__, 'CoreGroup').next()
-    server_number = servers_xml.iterfind('CoreGroupServer')
-
-    for item in server_number:
-        server_name = item.attrib['serverName']
+    server_list = []
+    for server in servers_xml.iterfind('CoreGroupServer'):
+        server_name = server.attrib['serverName']
         print 'Add Server : ' + server_name
-        server = neo_operation.insert_node(server_name, 'Server', {})[0]
-        li = neo_operation.find_element_by_name(item.attrib['nodeName'])
-        neo_operation.add_ref(li, 'has', server)
+        server_node = neo_operation.insert_node(server_name, 'Server', {})[0]
+        server_list.append(server_node)
+        for node_item in node_list:
+            if node_item['name'] == server.attrib['nodeName']:
+                neo_operation.add_ref(node_item, 'has', server_node)
+    return server_list
 
 
-def load_cluster():
+def load_cluster(server_list):
     """
     Load cluster definition, and build relationship between cluster and node numbers
     """
+    cluster_list = []
     for cluster_xml in load_ara_xml(__ORIGN_XML__, 'ServerCluster'):
         cluster_numbers = cluster_xml.iterfind('ClusterMember')
         #create cluster node
         cluster_name = cluster_xml.attrib['name']
         print 'Create Cluster : ' + cluster_name
         cluster = neo_operation.insert_node(cluster_xml.attrib['name'], 'Cluster', {})[0]
+        cluster_list.append(cluster)
         for item in cluster_numbers:
             print 'Load Cluster Number ' + item.attrib['memberName'] + ' for Cluster ' + cluster_name
-            li = neo_operation.find_element_by_name(item.attrib['memberName'])
-            neo_operation.add_ref(li, 'number of', cluster)
+            for server in server_list:
+                if server['name'] == item.attrib['memberName']:
+                    neo_operation.add_ref(server, 'number of', cluster)
+    return cluster_list
 
 
 if __name__ == '__main__':
@@ -128,10 +136,8 @@ if __name__ == '__main__':
     neo_operation.clean_up()
 
     #load asset
-    load_cell_and_nodes()
-    load_servers()
-    load_cluster()
-    app = load_app()
-    load_deployment(app)
+    server_list = load_cell_nodes_and_servers()
+    cluster_list = load_cluster(server_list)
+    load_app(cluster_list)
 
 
