@@ -10,13 +10,12 @@ class CellBuilder():
     Main class build object and relationship by handle BMA XML content
     """
 
-    def __init__(self, xml, uuid):
+    def __init__(self, bma_xml, uuid):
         self.node_list = []
         self.cluster_list = []
         self.server_list = []
-        self.neo_operation = GraphOperation()
-        self.ORIGN_XML = xml
-        self.UUID = uuid
+        self.neo_operation = GraphOperation(uuid)
+        self.xml = bma_xml
 
     def load_ara_xml(self, filename, path):
         """
@@ -40,15 +39,16 @@ class CellBuilder():
         """
         Load application definition and its relationship to cluster
         """
-        for app_xml in self.load_ara_xml(self.ORIGN_XML, 'Application'):
+        for app_xml in self.load_ara_xml(self.xml, 'Application'):
             app_node = self.neo_operation.insert_node(app_xml.attrib['displayName'], 'Application', {})[0]
             self.load_app_deployment_property_set(app_xml, app_node)
             self.load_deployment(app_xml, app_node, self.cluster_list)
 
     def load_deployment(self, app_xml, app_node, cluster_list):
         """
-        Draw application deployment model
+        Load application deployment target
         """
+        #TODO deploy to node or  cluster
         app_deployment_xml = app_xml.iterfind(
             'Deployment/ApplicationDeployment/DeploymentTargetMapping/ClusteredTarget').next()
         app_target = app_deployment_xml.attrib['name']
@@ -83,12 +83,12 @@ class CellBuilder():
         """
         Load all the node, server and cell
         """
-        cell_xml = self.load_ara_xml(self.ORIGN_XML, 'Cell').next()
+        cell_xml = self.load_ara_xml(self.xml, 'Cell').next()
         print 'Add Cell : ' + cell_xml.attrib['name']
         cell = self.neo_operation.insert_node(cell_xml.attrib['name'], 'Cell', {})[0]
 
         #load nodes tree
-        nodes_xml = self.load_ara_xml(self.ORIGN_XML, 'NodeGroup').next()
+        nodes_xml = self.load_ara_xml(self.xml, 'NodeGroup').next()
         #get list of nodes
         node_group_number = nodes_xml.iterfind('NodeGroupMember')
 
@@ -99,7 +99,7 @@ class CellBuilder():
             self.neo_operation.add_ref(cell, 'has', li)
 
         #load server and associated with node
-        servers_xml = self.load_ara_xml(self.ORIGN_XML, 'CoreGroup').next()
+        servers_xml = self.load_ara_xml(self.xml, 'CoreGroup').next()
         for server in servers_xml.iterfind('CoreGroupServer'):
             server_name = server.attrib['serverName']
             print 'Add Server : ' + server_name
@@ -113,7 +113,7 @@ class CellBuilder():
         """
         Load cluster definition, and build relationship between cluster and node numbers
         """
-        for cluster_xml in self.load_ara_xml(self.ORIGN_XML, 'ServerCluster'):
+        for cluster_xml in self.load_ara_xml(self.xml, 'ServerCluster'):
             cluster_numbers = cluster_xml.iterfind('ClusterMember')
             #create cluster node
             cluster_name = cluster_xml.attrib['name']
